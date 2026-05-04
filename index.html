@@ -1191,6 +1191,8 @@ window.saveEdit = async () => {
   document.getElementById('editBtn').classList.remove('loading');
   document.getElementById('editBtnText').textContent = 'Salvar alterações';
 };
+
+window.askDel = id => {
   if (pendingDel) cancelDel();
   pendingDel = id;
   const el = document.getElementById('confirm-'+id);
