@@ -18,7 +18,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#06060a;color:#fff;min-
 
 /* noise + blobs */
 body::before{content:'';position:fixed;inset:0;z-index:0;background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.8' numOctaves='4' stitchTiles='stitch'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.035'/></svg>");pointer-events:none;}
-body::after{content:'';position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 600px 400px at 10% 0%,rgba(234,179,8,0.08) 0%,transparent 70%),radial-gradient(ellipse 400px 300px at 90% 100%,rgba(180,83,9,0.07) 0%,transparent 70%);pointer-events:none;}
+body::after{content:'';position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 600px 400px at 10% 0%,rgba(255,255,255,0.04) 0%,transparent 70%),radial-gradient(ellipse 400px 300px at 90% 100%,rgba(255,255,255,0.03) 0%,transparent 70%);pointer-events:none;}
 
 .wrap{max-width:480px;margin:0 auto;padding:0 16px;position:relative;z-index:1;}
 
@@ -368,7 +368,7 @@ select.field-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http:/
             <p class="card-sub" id="balanceStatus">Neutro</p>
           </div>
           <div class="card-icon card-icon-balance">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(234,179,8,0.8)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
         </div>
       </div>
