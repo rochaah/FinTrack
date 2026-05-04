@@ -184,12 +184,17 @@ select:focus{border-color:rgba(234,179,8,0.3);box-shadow:0 0 0 2px rgba(234,179,
 .tx-amount-expense{color:rgba(244,63,94,0.9);}
 
 /* confirm delete inline */
-.tx-confirm{padding:10px 15px;background:rgba(244,63,94,0.05);border-top:0.5px solid rgba(244,63,94,0.1);}
-.tx-confirm p{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+.tx-confirm{padding:12px 15px 14px;background:rgba(244,63,94,0.05);border-top:0.5px solid rgba(244,63,94,0.1);margin-top:2px;}
+.tx-confirm p{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;}
 .tx-confirm-btns{display:flex;gap:7px;}
-.btn-del-yes,.btn-del-no{padding:5px 14px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',system-ui,sans-serif;}
+.btn-del-yes,.btn-del-no{padding:6px 16px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',system-ui,sans-serif;}
 .btn-del-yes{background:rgba(244,63,94,0.1);border:0.5px solid rgba(244,63,94,0.25);color:rgba(244,63,94,0.9);}
 .btn-del-no{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.3);}
+
+/* week divider */
+.week-divider{display:flex;align-items:center;gap:10px;margin:16px 0 10px;}
+.week-divider-line{flex:1;height:0.5px;background:rgba(255,255,255,0.07);}
+.week-divider-label{font-size:10px;font-weight:600;color:rgba(255,255,255,0.18);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;}
 
 .empty-state{text-align:center;padding:48px 20px;color:rgba(255,255,255,0.2);font-size:13px;}
 .empty-icon{font-size:28px;opacity:0.2;margin-bottom:12px;}
@@ -528,6 +533,34 @@ select.field-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http:/
   </div>
 </div>
 
+<!-- EDIT SHEET -->
+<div class="sheet-overlay" id="editOverlay" onclick="closeEdit()"></div>
+<div class="sheet" id="editSheet">
+  <div class="sheet-inner glass">
+    <div class="sheet-line-top"></div>
+    <div class="sheet-shine"></div>
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <span class="sheet-title">Editar transação</span>
+      <button class="sheet-close" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="type-row">
+      <button class="type-btn on-income" id="editBtnIncome" onclick="setEditType('income')">↑ Receita</button>
+      <button class="type-btn" id="editBtnExpense" onclick="setEditType('expense')">↓ Despesa</button>
+    </div>
+    <div class="field-row">
+      <div class="field"><label class="field-label">Data</label><input class="field-input" type="date" id="editDate"></div>
+      <div class="field"><label class="field-label">Valor (R$)</label><input class="field-input" type="text" id="editAmount" placeholder="0,00" oninput="maskCurrency(this)"></div>
+    </div>
+    <div class="field"><label class="field-label">Categoria</label><select class="field-input" id="editCategory"></select></div>
+    <div class="field"><label class="field-label">Observação</label><textarea class="field-input" id="editObs" placeholder="Opcional..."></textarea></div>
+    <div class="btn-submit-wrap">
+      <div class="btn-submit-ring income" id="editBtnRing"></div>
+      <button class="btn-submit income" id="editBtn" onclick="saveEdit()"><span id="editBtnText">Salvar alterações</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -794,6 +827,9 @@ window.addTransaction = async () => {
     document.getElementById('txAmount').value = '';
     document.getElementById('txObs').value = '';
     document.getElementById('txCustomCat').value = '';
+    // Save custom category and track usage
+    if (cat === 'Personalizado' && cc) saveCustomCat(cType, cc);
+    trackCatUsage(category);
     initDate(); populateCats();
     setRecurrence('normal');
     document.getElementById('customInstallmentField').style.display = 'none';
@@ -942,22 +978,40 @@ function buildDonut(moTxs) {
   }).join('');
 }
 
+function getWeekLabel(txDay, today) {
+  const todayMon = new Date(today); todayMon.setDate(today.getDate() - today.getDay() + (today.getDay()===0?-6:1));
+  todayMon.setHours(0,0,0,0);
+  const diff = Math.floor((todayMon - txDay) / (7*24*60*60*1000));
+  if (diff <= 0) return 'Esta semana';
+  if (diff === 1) return 'Semana passada';
+  if (diff === 2) return 'Semana retrasada';
+  return `Há ${diff} semanas`;
+}
+
 function groupByDate(txList) {
-  const groups = {};
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+
+  // Group by week first, then by date inside each week
+  const weekGroups = {}; // weekLabel -> { dateLabel -> [txs] }
+  const weekOrder = [];
+
   txList.forEach(t => {
     const d = new Date(t.date+'T00:00:00');
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
     const txDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    let label;
-    if (txDay.getTime() === today.getTime()) label = 'Hoje';
-    else if (txDay.getTime() === yesterday.getTime()) label = 'Ontem';
-    else label = `${d.getDate()} de ${MONTHS[d.getMonth()]}`;
-    if (!groups[label]) groups[label] = [];
-    groups[label].push(t);
+    let dateLabel;
+    if (txDay.getTime() === today.getTime()) dateLabel = 'Hoje';
+    else if (txDay.getTime() === yesterday.getTime()) dateLabel = 'Ontem';
+    else dateLabel = `${d.getDate()} de ${MONTHS[d.getMonth()]}`;
+
+    const weekLabel = getWeekLabel(txDay, today);
+    if (!weekGroups[weekLabel]) { weekGroups[weekLabel] = {}; weekOrder.push(weekLabel); }
+    if (!weekGroups[weekLabel][dateLabel]) weekGroups[weekLabel][dateLabel] = [];
+    weekGroups[weekLabel][dateLabel].push(t);
   });
-  return groups;
+
+  return { weekGroups, weekOrder };
 }
 
 function render() {
@@ -995,38 +1049,148 @@ function render() {
     return;
   }
 
-  const groups = groupByDate(filtered);
-  list.innerHTML = Object.entries(groups).map(([dateLabel, items]) => `
-    <p class="date-group-label">${dateLabel}</p>
-    ${items.map(t => `
-      <div class="tx-card tx-card-${t.type} glass" id="tx-${t.id}">
-        <div class="tx-inner">
-          <div class="tx-icon tx-icon-${t.type}">
-            ${t.type==='income'
-              ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(16,185,129,0.8)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`
-              : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(244,63,94,0.8)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`
-            }
+  const { weekGroups, weekOrder } = groupByDate(filtered);
+  const uniqueWeeks = [...new Set(weekOrder)];
+
+  list.innerHTML = uniqueWeeks.map((weekLabel, wi) => {
+    const dateGroups = weekGroups[weekLabel];
+    const isFirstWeek = wi === 0;
+    return `
+      ${!isFirstWeek ? `<div class="week-divider"><div class="week-divider-line"></div><span class="week-divider-label">${weekLabel}</span><div class="week-divider-line"></div></div>` : ''}
+      ${Object.entries(dateGroups).map(([dateLabel, items]) => `
+        <p class="date-group-label">${isFirstWeek && wi===0 ? dateLabel : dateLabel}</p>
+        ${items.map(t => `
+          <div class="tx-card tx-card-${t.type} glass" id="tx-${t.id}">
+            <div class="tx-inner">
+              <div class="tx-icon tx-icon-${t.type}">
+                ${t.type==='income'
+                  ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(16,185,129,0.8)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`
+                  : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(244,63,94,0.8)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`
+                }
+              </div>
+              <div class="tx-info">
+                <p class="tx-name">${t.category}</p>
+                <p class="tx-meta">${t.type==='income'?'Receita':'Despesa'}${t.recurringRuleId ? ' · 🔁 Recorrente' : ''}${t.installment ? ` · ${t.obs}` : (t.obs ? ' · '+t.obs : '')}</p>
+              </div>
+              <p class="tx-amount tx-amount-${t.type}">${t.type==='income'?'+':'−'} ${fmt(t.amount)}</p>
+              <div style="display:flex;gap:4px;flex-shrink:0;">
+                <button onclick="openEdit('${t.id}')" style="background:none;border:none;color:rgba(255,255,255,0.15);cursor:pointer;padding:4px;font-size:12px;">✎</button>
+                <button onclick="askDel('${t.id}')" style="background:none;border:none;color:rgba(255,255,255,0.15);cursor:pointer;padding:4px;font-size:13px;">✕</button>
+              </div>
+            </div>
+            <div id="confirm-${t.id}" style="display:none;" class="tx-confirm">
+              <p>Excluir esta transação?</p>
+              <div class="tx-confirm-btns">
+                <button class="btn-del-yes" onclick="doDel('${t.id}')">Excluir</button>
+                <button class="btn-del-no" onclick="cancelDel()">Cancelar</button>
+              </div>
+            </div>
           </div>
-          <div class="tx-info">
-            <p class="tx-name">${t.category}</p>
-            <p class="tx-meta">${t.type==='income'?'Receita':'Despesa'}${t.recurringRuleId ? ' · 🔁 Recorrente' : ''}${t.installment ? ` · ${t.obs}` : (t.obs ? ' · '+t.obs : '')}</p>
-          </div>
-          <p class="tx-amount tx-amount-${t.type}">${t.type==='income'?'+':'−'} ${fmt(t.amount)}</p>
-          <button onclick="askDel('${t.id}')" style="background:none;border:none;color:rgba(255,255,255,0.15);cursor:pointer;padding:4px;font-size:13px;flex-shrink:0;">✕</button>
-        </div>
-        <div id="confirm-${t.id}" style="display:none;" class="tx-confirm">
-          <p>Excluir esta transação?</p>
-          <div class="tx-confirm-btns">
-            <button class="btn-del-yes" onclick="doDel('${t.id}')">Excluir</button>
-            <button class="btn-del-no" onclick="cancelDel()">Cancelar</button>
-          </div>
-        </div>
-      </div>
-    `).join('')}
-  `).join('');
+        `).join('')}
+      `).join('')}
+    `;
+  }).join('');
 }
 
-window.askDel = id => {
+// ── CUSTOM CATEGORIES ──
+function getCustomCats(type) {
+  try { return JSON.parse(localStorage.getItem(`syre_custom_${type}`) || '[]'); } catch { return []; }
+}
+function saveCustomCat(type, name) {
+  const cats = getCustomCats(type);
+  if (!cats.includes(name)) { cats.push(name); localStorage.setItem(`syre_custom_${type}`, JSON.stringify(cats)); }
+}
+function getCatUsage() {
+  try { return JSON.parse(localStorage.getItem('syre_cat_usage') || '{}'); } catch { return {}; }
+}
+function trackCatUsage(cat) {
+  const usage = getCatUsage();
+  usage[cat] = (usage[cat] || 0) + 1;
+  localStorage.setItem('syre_cat_usage', JSON.stringify(usage));
+}
+function getSortedCats(type) {
+  const defaults = type === 'income' ? CATS_IN : CATS_EX;
+  const custom = getCustomCats(type);
+  const usage = getCatUsage();
+  const all = [...defaults.filter(c => c !== 'Personalizado'), ...custom, 'Personalizado'];
+  return all.sort((a, b) => {
+    if (a === 'Personalizado') return 1;
+    if (b === 'Personalizado') return -1;
+    return (usage[b] || 0) - (usage[a] || 0);
+  });
+}
+
+window.populateCats = function() {
+  const cats = getSortedCats(cType);
+  document.getElementById('txCategory').innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  toggleCustomCat();
+};
+
+// ── EDIT ──
+let editingId = null;
+let editType = 'income';
+
+window.openEdit = id => {
+  const t = txs[id]; if (!t) return;
+  editingId = id;
+  editType = t.type;
+  document.getElementById('editDate').value = t.date;
+  document.getElementById('editAmount').value = t.amount.toFixed(2).replace('.', ',');
+  document.getElementById('editObs').value = t.obs || '';
+  // populate cats
+  const cats = getSortedCats(t.type);
+  document.getElementById('editCategory').innerHTML = cats.filter(c=>c!=='Personalizado').map(c=>`<option value="${c}"${c===t.category?' selected':''}>${c}</option>`).join('');
+  // set type buttons
+  document.getElementById('editBtnIncome').className = 'type-btn' + (t.type==='income' ? ' on-income' : '');
+  document.getElementById('editBtnExpense').className = 'type-btn' + (t.type==='expense' ? ' on-expense' : '');
+  const btn = document.getElementById('editBtn');
+  const ring = document.getElementById('editBtnRing');
+  btn.className = `btn-submit ${t.type}`;
+  ring.className = `btn-submit-ring ${t.type}`;
+  document.getElementById('editSheet').classList.add('open');
+  document.getElementById('editOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeEdit = () => {
+  document.getElementById('editSheet').classList.remove('open');
+  document.getElementById('editOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  editingId = null;
+};
+
+window.setEditType = t => {
+  editType = t;
+  document.getElementById('editBtnIncome').className = 'type-btn' + (t==='income' ? ' on-income' : '');
+  document.getElementById('editBtnExpense').className = 'type-btn' + (t==='expense' ? ' on-expense' : '');
+  const cats = getSortedCats(t);
+  document.getElementById('editCategory').innerHTML = cats.filter(c=>c!=='Personalizado').map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('editBtn').className = `btn-submit ${t}`;
+  document.getElementById('editBtnRing').className = `btn-submit-ring ${t}`;
+};
+
+window.saveEdit = async () => {
+  if (!editingId) return;
+  const date = document.getElementById('editDate').value;
+  const amt = document.getElementById('editAmount').value;
+  const cat = document.getElementById('editCategory').value;
+  const obs = document.getElementById('editObs').value.trim();
+  if (!date || !amt) return showToast('Preencha todos os campos.', 'error');
+  document.getElementById('editBtn').classList.add('loading');
+  document.getElementById('editBtnText').textContent = 'Salvando…';
+  sync('syncing');
+  try {
+    await db.ref(`users/${uid}/transactions/${editingId}`).update({
+      date, type: editType, amount: parse(amt), category: cat, obs, updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    trackCatUsage(cat);
+    closeEdit();
+    showToast('Transação atualizada!', 'success');
+    sync('synced');
+  } catch(e) { showToast('Erro ao salvar.', 'error'); sync('error'); }
+  document.getElementById('editBtn').classList.remove('loading');
+  document.getElementById('editBtnText').textContent = 'Salvar alterações';
+};
   if (pendingDel) cancelDel();
   pendingDel = id;
   const el = document.getElementById('confirm-'+id);
